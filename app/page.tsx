@@ -42,7 +42,7 @@ export default function MCXTradingApp() {
   }
 
   const checkForAlerts = (oldData: OptionChainData[], newData: OptionChainData[]) => {
-    let triggeredAlerts: string[] = []
+    const triggeredAlerts: string[] = []
 
     newData.forEach((newItem, index) => {
       const oldItem = oldData[index]
