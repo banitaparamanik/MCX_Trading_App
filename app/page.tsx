@@ -209,13 +209,13 @@ const performAutoDownload = useCallback(async (currentRecordCount: number) => {
     lastDownloadCount: currentRecordCount,
   }))
 
-  toast(
+toast(
   <div>
     <div className="font-bold">
-    "🔄 Auto-Download Complete"
+      🔄 Auto-Download Complete
     </div>
     <div>
-     `MCX data automatically exported at ${currentRecordCount} records`
+      {`MCX data automatically exported at ${currentRecordCount} records`}
     </div>
   </div>,
   { duration: 5000 }
@@ -279,16 +279,15 @@ const fetchOptionChainData = useCallback(async () => {
   } catch (error) {
     console.error("Error fetching option chain:", error)
     if (isClient) {
-        toast(
+toast(
   <div>
     <div className="font-bold">
-"Error"
+      Error
     </div>
     <div>
-     "Failed to fetch option chain data."
+      Failed to fetch option chain data.
     </div>
-  </div>,
- 
+  </div>
 )
    
     }
@@ -308,10 +307,10 @@ const fetchOptionChainData = useCallback(async () => {
 toast(
   <div>
     <div className="font-bold">
-      "🔄 Auto Refresh Complete"
+      🔄 Auto Refresh Complete
     </div>
     <div>
-    "Option chain data has been refreshed.",
+      Option chain data has been refreshed.
     </div>
   </div>,
   { duration: 3000 }
@@ -467,10 +466,10 @@ toast(
 toast(
   <div>
     <div className="font-bold">
-   "📊 MCX Data Export Complete",
+      📊 MCX Data Export Complete
     </div>
     <div>
-    `${dataToExport.length} historical records exported in MCX format`,
+      {`${dataToExport.length} historical records exported in MCX format`}
     </div>
   </div>,
   { duration: 3000 }
@@ -639,7 +638,7 @@ toast(
                 const enabled = e.target.checked
                 setAlertSettings((prev) => ({ ...prev, enabled }))
                 console.log("🔔 Alerts", enabled ? "ENABLED" : "DISABLED")
-        toast(
+                toast(
   <div>
     <div className="font-bold">
       {enabled ? "🔔 Alerts Enabled" : "🔕 Alerts Disabled"}
@@ -712,14 +711,16 @@ toast(
                 console.log("📥 Auto-download", enabled ? "ENABLED" : "DISABLED")
                 toast(
   <div>
-    <div className="font-bold">{
+    <div className="font-bold">
       
-enabled ? "📥 Auto-Download Enabled" : "📥 Auto-Download Disabled"},
+enabled ? 📥 Auto-Download Enabled: 📥 Auto-Download Disabled,
     </div>
     <div>
-      {enabled
-        ? `CSV will auto-download at ${autoDownloadSettings.recordThreshold} records`
-        : "Auto-download has been disabled"}
+      enabled
+        ? <div>
+  {`CSV will auto-download at ${autoDownloadSettings.recordThreshold} records`}
+</div>
+        : Auto-download has been disabled
     </div>
   </div>,
   { duration: 3000 }
@@ -855,7 +856,7 @@ enabled ? "📥 Auto-Download Enabled" : "📥 Auto-Download Disabled"},
   </div>,
   { duration: 3000 }
 )
-              
+              ;
                 }}
                 className="flex-1"
               >
