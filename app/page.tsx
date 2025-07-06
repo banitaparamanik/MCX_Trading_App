@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { Activity, AlertTriangle, BarChart3, Download } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"; // Import useCallback
 import { MCXApiService, type AnalyticsData, type OptionChainData } from "../services/mcx-api"
 
 interface PriceAlert {
@@ -48,9 +48,16 @@ export default function MCXTradingApp() {
 
   const [autoDownloadSettings, setAutoDownloadSettings] = useState({
     enabled: true,
-    recordThreshold: 400,
+    recordThreshold: 500,
     lastDownloadCount: 0,
   })
+
+  ///New State for lastAutoDownloadInfo:
+
+  const [lastAutoDownloadInfo, setLastAutoDownloadInfo] = useState<{
+  count: number;
+  timestamp: Date;
+} | null>(null);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const { toast } = useToast()
@@ -64,177 +71,217 @@ export default function MCXTradingApp() {
   const commodities = ["CRUDEOIL", "GOLD", "SILVER", "COPPER", "ZINC", "LEAD", "NICKEL", "ALUMINIUM"]
   const expiries = ["17JUL2025", "19AUG2025", "19SEP2025", "21OCT2025", "19NOV2025", "19DEC2025"]
 
-  // Initialize client-side rendering
-  useEffect(() => {
-    setIsClient(true)
-    setLastRefreshTime(new Date())
-    fetchOptionChainData()
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
+  // Show alert notification
+  // Wrapped in useCallback as it's called from checkForAlerts and passed to CriticalAlertModal
+  const showAlert = useCallback(
+    (alert: PriceAlert) => {
+      if (!isClient || !alertSettings.enabled) {
+        console.log("🔕 Alert blocked - disabled or not client")
+        return
       }
-      if (autoRefreshIntervalRef.current) {
-        clearInterval(autoRefreshIntervalRef.current)
-        autoRefreshIntervalRef.current = null
+
+      console.log("🔔 Showing alert:", alert)
+
+      if (alertSettings.soundEnabled) {
+        const audio = new Audio(
+          "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT",
+        )
+        audio.play().catch(() => {})
       }
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current)
-        countdownIntervalRef.current = null
-      }
-    }
-  }, [])
 
-  // Fetch data when commodity or expiry changes
-  useEffect(() => {
-    if (isClient) {
-      fetchOptionChainData()
-    }
-  }, [selectedCommodity, selectedExpiry, isClient])
-
-  // Fetch option chain data
-  const fetchOptionChainData = async () => {
-    if (!isClient) return
-
-    try {
-      const data = await mcxApiService.current.fetchOptionChain(selectedCommodity, selectedExpiry)
-      setOptionChainData(data)
-
-      // Calculate analytics
-      const analyticsData = mcxApiService.current.calculateAnalytics(data)
-      setAnalytics(analyticsData)
-
-      // Add to historical data
-      setHistoricalData((prev) => {
-        const newHistoricalData = [...data, ...prev.slice(0, 500)] // Keep last 500 records
-
-        // Check for auto-download trigger
-        if (
-          autoDownloadSettings.enabled &&
-          newHistoricalData.length >= autoDownloadSettings.recordThreshold &&
-          newHistoricalData.length > autoDownloadSettings.lastDownloadCount
-        ) {
-          console.log(`🔄 Auto-download triggered: ${newHistoricalData.length} records reached`)
-
-          // Trigger auto download
-          setTimeout(() => {
-            performAutoDownload(newHistoricalData.length)
-          }, 1000) // Small delay to ensure state is updated
-        }
-
-        return newHistoricalData
+      toast({
+        title: "🚨 Option Price Alert!",
+        description: `${alert.symbol} ${alert.strike}: ₹${alert.oldPrice.toFixed(2)} → ₹${alert.newPrice.toFixed(2)} (${alert.changePercent.toFixed(2)}%)`,
+        variant: "destructive",
+        duration: 5000,
       })
 
-      // Check for alerts
-      checkForAlerts(data)
-    } catch (error) {
-      console.error("Error fetching option chain:", error)
-      if (isClient) {
-        toast({
-          title: "Error",
-          description: "Failed to fetch option chain data. Using mock data.",
-          variant: "destructive",
-        })
+      if (alert.changePercent > 10) {
+        setShowAlertModal(true)
       }
-    }
-  }
+    },
+    [isClient, alertSettings.enabled, alertSettings.soundEnabled, toast],
+  )
 
   // Check for price alerts
-  const checkForAlerts = (newData: OptionChainData[]) => {
-    // Early return if alerts are disabled, no client, or no previous data to compare
-    if (!alertSettings.enabled || !isClient || optionChainData.length === 0) {
-      console.log("🔕 Alerts disabled or no previous data to compare")
-      return
-    }
-
-    console.log("🔔 Checking for alerts...", {
-      enabled: alertSettings.enabled,
-      threshold: alertSettings.threshold,
-      newDataLength: newData.length,
-      oldDataLength: optionChainData.length,
-    })
-
-    let alertsTriggered = 0
-
-    newData.forEach((newItem, index) => {
-      const oldItem = optionChainData[index]
-      if (!oldItem || oldItem.STRIKE_PRICE !== newItem.STRIKE_PRICE) return
-
-      // Check PE alerts
-      if (oldItem.PE_LTP > 0 && newItem.PE_LTP > 0) {
-        const peChangePercent = Math.abs(((newItem.PE_LTP - oldItem.PE_LTP) / oldItem.PE_LTP) * 100)
-        if (peChangePercent >= alertSettings.threshold) {
-          const alert: PriceAlert = {
-            id: `pe-alert-${Date.now()}-${Math.random()}`,
-            symbol: `${selectedCommodity} PE`,
-            strike: newItem.STRIKE_PRICE,
-            oldPrice: oldItem.PE_LTP,
-            newPrice: newItem.PE_LTP,
-            changePercent: peChangePercent,
-            timestamp: new Date(),
-          }
-          setAlerts((prev) => [alert, ...prev.slice(0, 19)])
-          showAlert(alert)
-          alertsTriggered++
-          console.log("🚨 PE Alert triggered:", alert)
-        }
+  // Wrapped in useCallback as it's called from fetchOptionChainData
+  const checkForAlerts = useCallback(
+    (newData: OptionChainData[]) => {
+      // Early return if alerts are disabled, no client, or no previous data to compare
+      // Use the current state of optionChainData via closure or pass it if it's the 'previous' state
+      if (!alertSettings.enabled || !isClient || optionChainData.length === 0) {
+        console.log("🔕 Alerts disabled or no previous data to compare")
+        return
       }
 
-      // Check CE alerts
-      if (oldItem.CE_LTP > 0 && newItem.CE_LTP > 0) {
-        const ceChangePercent = Math.abs(((newItem.CE_LTP - oldItem.CE_LTP) / oldItem.CE_LTP) * 100)
-        if (ceChangePercent >= alertSettings.threshold) {
-          const alert: PriceAlert = {
-            id: `ce-alert-${Date.now()}-${Math.random()}`,
-            symbol: `${selectedCommodity} CE`,
-            strike: newItem.STRIKE_PRICE,
-            oldPrice: oldItem.CE_LTP,
-            newPrice: newItem.CE_LTP,
-            changePercent: ceChangePercent,
-            timestamp: new Date(),
+      console.log("🔔 Checking for alerts...", {
+        enabled: alertSettings.enabled,
+        threshold: alertSettings.threshold,
+        newDataLength: newData.length,
+        oldDataLength: optionChainData.length,
+      })
+
+      let alertsTriggered = 0
+
+      newData.forEach((newItem, index) => {
+        const oldItem = optionChainData[index] // Access optionChainData from the closure
+        if (!oldItem || oldItem.STRIKE_PRICE !== newItem.STRIKE_PRICE) return
+
+        // Check PE alerts
+        if (oldItem.PE_LTP > 0 && newItem.PE_LTP > 0) {
+          const peChangePercent = Math.abs(((newItem.PE_LTP - oldItem.PE_LTP) / oldItem.PE_LTP) * 100)
+          if (peChangePercent >= alertSettings.threshold) {
+            const alert: PriceAlert = {
+              id: `pe-alert-${Date.now()}-${Math.random()}`,
+              symbol: `${selectedCommodity} PE`,
+              strike: newItem.STRIKE_PRICE,
+              oldPrice: oldItem.PE_LTP,
+              newPrice: newItem.PE_LTP,
+              changePercent: peChangePercent,
+              timestamp: new Date(),
+            }
+            // Use functional update for setAlerts to get the latest state
+            setAlerts((prev) => [alert, ...prev.slice(0, 19)])
+            showAlert(alert)
+            alertsTriggered++
+            console.log("🚨 PE Alert triggered:", alert)
           }
-          setAlerts((prev) => [alert, ...prev.slice(0, 19)])
-          showAlert(alert)
-          alertsTriggered++
-          console.log("🚨 CE Alert triggered:", alert)
         }
+
+        // Check CE alerts
+        if (oldItem.CE_LTP > 0 && newItem.CE_LTP > 0) {
+          const ceChangePercent = Math.abs(((newItem.CE_LTP - oldItem.CE_LTP) / oldItem.CE_LTP) * 100)
+          if (ceChangePercent >= alertSettings.threshold) {
+            const alert: PriceAlert = {
+              id: `ce-alert-${Date.now()}-${Math.random()}`,
+              symbol: `${selectedCommodity} CE`,
+              strike: newItem.STRIKE_PRICE,
+              oldPrice: oldItem.CE_LTP,
+              newPrice: newItem.CE_LTP,
+              changePercent: ceChangePercent,
+              timestamp: new Date(),
+            }
+            // Use functional update for setAlerts to get the latest state
+            setAlerts((prev) => [alert, ...prev.slice(0, 19)])
+            showAlert(alert)
+            alertsTriggered++
+            console.log("🚨 CE Alert triggered:", alert)
+          }
+        }
+      })
+
+      console.log(`✅ Alert check complete. ${alertsTriggered} alerts triggered.`)
+    },
+    [alertSettings.enabled, alertSettings.threshold, isClient, optionChainData, selectedCommodity, showAlert],
+  )
+
+  // Auto Download function
+  // Wrapped in useCallback as it's called from fetchOptionChainData
+const performAutoDownload = useCallback(async (currentRecordCount: number) => {
+  if (!isClient || !autoDownloadSettings.enabled) return
+
+  console.log(`📥 Performing auto-download with ${currentRecordCount} records`)
+
+  const currentTime = new Date()
+  const headers = ["Commodity", "Expiry", "Strike Price", "PE LTP", "CE LTP"]
+
+  const csvContent = [
+    headers.join(","),
+    ...historicalData.map((row) =>
+      ["CRUDEOIL", "17JUL2025", row.STRIKE_PRICE, row.PE_LTP, row.CE_LTP].join(",")
+    ),
+  ].join("\n")
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `MCX_AUTO_CRUDEOIL_17JUL2025_${currentTime.toISOString().split("T")[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+
+  setAutoDownloadSettings((prev) => ({
+    ...prev,
+    lastDownloadCount: currentRecordCount,
+  }))
+
+  toast({
+    title: "🔄 Auto-Download Complete",
+    description: `MCX data automatically exported at ${currentRecordCount} records`,
+    duration: 5000,
+  })
+}, [isClient, autoDownloadSettings.enabled, historicalData, toast])
+
+
+    const isDataChanged = (oldData: OptionChainData[], newData: OptionChainData[]): boolean => {
+    if (oldData.length !== newData.length) return true
+
+    for (let i = 0; i < newData.length; i++) {
+      if (
+        oldData[i].STRIKE_PRICE !== newData[i].STRIKE_PRICE ||
+        oldData[i].PE_LTP !== newData[i].PE_LTP ||
+        oldData[i].CE_LTP !== newData[i].CE_LTP
+      ) {
+        return true
       }
-    })
-
-    console.log(`✅ Alert check complete. ${alertsTriggered} alerts triggered.`)
+    }
+    return false
   }
 
-  // Show alert notification
-  const showAlert = (alert: PriceAlert) => {
-    if (!isClient || !alertSettings.enabled) {
-      console.log("🔕 Alert blocked - disabled or not client")
-      return
+  // Fetch option chain data
+  // Wrapped in useCallback as it's called on mount, expiry/commodity change, and intervals
+ 
+
+const fetchOptionChainData = useCallback(async () => {
+  if (!isClient) return
+
+  try {
+    const data = await mcxApiService.current.fetchOptionChain("CRUDEOIL", "17JUL2025")
+
+    if (isDataChanged(optionChainData, data)) {
+      console.log("✅ New data detected. Adding to historical records.")
+
+      setOptionChainData(data)
+
+      setHistoricalData((prev) => {
+        const updatedHistoricalData = [...prev, ...data]
+
+        if (
+          autoDownloadSettings.enabled &&
+          updatedHistoricalData.length >= autoDownloadSettings.recordThreshold &&
+          updatedHistoricalData.length > autoDownloadSettings.lastDownloadCount
+        ) {
+          console.log(`🔄 Auto-download triggered: ${updatedHistoricalData.length} records reached`)
+
+          setTimeout(() => {
+            performAutoDownload(updatedHistoricalData.length)
+          }, 1000)
+        }
+
+        return updatedHistoricalData
+      })
+    } else {
+      console.log("⚠️ No data change detected. Skipping storage.")
     }
-
-    console.log("🔔 Showing alert:", alert)
-
-    if (alertSettings.soundEnabled) {
-      const audio = new Audio(
-        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT",
-      )
-      audio.play().catch(() => {})
-    }
-
-    toast({
-      title: "🚨 Option Price Alert!",
-      description: `${alert.symbol} ${alert.strike}: ₹${alert.oldPrice.toFixed(2)} → ₹${alert.newPrice.toFixed(2)} (${alert.changePercent.toFixed(2)}%)`,
-      variant: "destructive",
-      duration: 5000,
-    })
-
-    if (alert.changePercent > 10) {
-      setShowAlertModal(true)
+  } catch (error) {
+    console.error("Error fetching option chain:", error)
+    if (isClient) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch option chain data.",
+        variant: "destructive",
+      })
     }
   }
+}, [isClient, optionChainData, autoDownloadSettings, performAutoDownload, toast])
+
+// Include all external dependencies here
 
   // Auto refresh function
-  const performAutoRefresh = async () => {
+  // Wrapped in useCallback as it's used in setInterval
+  const performAutoRefresh = useCallback(async () => {
     if (!isClient) return
 
     await fetchOptionChainData()
@@ -246,10 +293,11 @@ export default function MCXTradingApp() {
       description: "Option chain data has been refreshed.",
       duration: 3000,
     })
-  }
+  }, [isClient, fetchOptionChainData, toast]) // Dependencies: isClient, fetchOptionChainData
 
   // Toggle auto refresh
-  const toggleAutoRefresh = () => {
+  // Wrapped in useCallback as it's an event handler
+  const toggleAutoRefresh = useCallback(() => {
     if (!isClient) return
 
     if (autoRefresh) {
@@ -276,7 +324,7 @@ export default function MCXTradingApp() {
         })
       }, 1000)
     }
-  }
+  }, [autoRefresh, isClient, performAutoRefresh]) // Dependencies: autoRefresh, isClient, performAutoRefresh
 
   const formatCountdown = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
@@ -284,7 +332,9 @@ export default function MCXTradingApp() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
-  const toggleLiveUpdates = () => {
+  // Toggle live updates
+  // Wrapped in useCallback as it's an event handler
+  const toggleLiveUpdates = useCallback(() => {
     if (!isClient) return
 
     if (isLive) {
@@ -297,10 +347,11 @@ export default function MCXTradingApp() {
       intervalRef.current = setInterval(fetchOptionChainData, 10000) // Update every 10 seconds
       setIsLive(true)
     }
-  }
+  }, [isClient, isLive, fetchOptionChainData]) // Dependencies: isClient, isLive, fetchOptionChainData
 
   // Download CSV function - MCX Option Chain Format
-  const downloadCSV = () => {
+  // Wrapped in useCallback as it's an event handler
+  const downloadCSV = useCallback(() => {
     if (!isClient) return
 
     // MCX-style headers matching the table structure
@@ -333,10 +384,12 @@ export default function MCXTradingApp() {
     ]
 
     // Get current underlying value
+    // Access current analytics state via closure
     const underlyingValue = analytics?.underlyingValue || mcxApiService.current.getUnderlyingValue()
     const currentTime = new Date()
 
     // Use historical data (all collected records) instead of just current optionChainData
+    // Access historicalData and optionChainData from the closure
     const dataToExport = historicalData.length > 0 ? historicalData.slice(0, 1000) : optionChainData
 
     const csvContent = [
@@ -393,111 +446,38 @@ export default function MCXTradingApp() {
       description: `${dataToExport.length} historical records exported in MCX format`,
       duration: 4000,
     })
-  }
+  }, [isClient, analytics, historicalData, optionChainData, selectedCommodity, selectedExpiry, toast]) // Dependencies
 
-  // Auto Download function
-  const performAutoDownload = (currentRecordCount: number) => {
-    if (!isClient || !autoDownloadSettings.enabled) return
+  // Initialize client-side rendering
+  // The useEffect for initial data fetch and cleanup remains largely the same,
+  // but it now depends on fetchOptionChainData which is a useCallback.
+  useEffect(() => {
+    setIsClient(true)
+    setLastRefreshTime(new Date())
+    fetchOptionChainData()
 
-    console.log(`📥 Performing auto-download with ${currentRecordCount} records`)
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current)
+        autoRefreshIntervalRef.current = null
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+      }
+    }
+  }, [fetchOptionChainData]) // Dependency: fetchOptionChainData (which is memoized)
 
-    // Get current underlying value
-    const underlyingValue = analytics?.underlyingValue || mcxApiService.current.getUnderlyingValue()
-    const currentTime = new Date()
-
-    // MCX-style headers matching the table structure
-    const headers = [
-      "Commodity",
-      "Expiry",
-      "Underlying Price",
-      "Strike Price",
-      // PUT OPTIONS
-      "PE OI",
-      "PE Volume",
-      "PE LTP",
-      "PE Abs Change",
-      "PE % Change",
-      "PE Bid",
-      "PE Ask",
-      "PE Turnover",
-      // CALL OPTIONS
-      "CE Bid",
-      "CE Ask",
-      "CE Abs Change",
-      "CE % Change",
-      "CE LTP",
-      "CE Volume",
-      "CE OI",
-      "CE Turnover",
-      // META DATA
-      "Timestamp",
-      "Data Source",
-    ]
-
-    // Use actual historical data instead of current optionChainData
-    const dataToExport = historicalData.slice(0, currentRecordCount)
-
-    const csvContent = [
-      // Header row
-      headers.join(","),
-
-      // Data rows - using actual historical data with proper timestamps
-      ...dataToExport.map((row, index) => {
-        // Create realistic timestamps for historical data
-        const recordTime = new Date(currentTime.getTime() - index * 60000) // 1 minute intervals
-
-        return [
-          selectedCommodity,
-          selectedExpiry,
-          underlyingValue.toFixed(2),
-          row.STRIKE_PRICE,
-          // PUT OPTIONS - using actual data from historicalData
-          row.PE_OI?.toLocaleString() || 0,
-          row.PE_VOLUME?.toLocaleString() || 0,
-          row.PE_LTP?.toFixed(2) || 0,
-          row.PE_ABS_CHNG?.toFixed(2) || 0,
-          row.PE_PER_CHNG?.toFixed(2) || 0,
-          row.PE_BID?.toFixed(2) || 0,
-          row.PE_ASK?.toFixed(2) || 0,
-          row.PE_TURNOVER?.toFixed(2) || 0,
-          // CALL OPTIONS - using actual data from historicalData
-          row.CE_BID?.toFixed(2) || 0,
-          row.CE_ASK?.toFixed(2) || 0,
-          row.CE_ABS_CHNG?.toFixed(2) || 0,
-          row.CE_PER_CHNG?.toFixed(2) || 0,
-          row.CE_LTP?.toFixed(2) || 0,
-          row.CE_VOLUME?.toLocaleString() || 0,
-          row.CE_OI?.toLocaleString() || 0,
-          row.CE_TURNOVER?.toFixed(2) || 0,
-          // META DATA
-          recordTime.toLocaleString(),
-          "MCX Live API",
-        ].join(",")
-      }),
-    ].join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `MCX_AUTO_${selectedCommodity}_${selectedExpiry}_${currentTime.toISOString().split("T")[0]}_${currentTime.toTimeString().split(" ")[0].replace(/:/g, "")}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-
-    // Update last download count
-    setAutoDownloadSettings((prev) => ({
-      ...prev,
-      lastDownloadCount: currentRecordCount,
-    }))
-
-    toast({
-      title: "🔄 Auto-Download Complete",
-      description: `${dataToExport.length} historical MCX records exported automatically`,
-      duration: 5000,
-    })
-  }
+  // Fetch data when commodity or expiry changes
+  useEffect(() => {
+    if (isClient) {
+      fetchOptionChainData()
+    }
+  }, [selectedCommodity, selectedExpiry, isClient, fetchOptionChainData]) // Dependency: fetchOptionChainData
 
   // Market Analytics Panel
   const AnalyticsPanel = () => {
@@ -607,13 +587,18 @@ export default function MCXTradingApp() {
             {isLive && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
           </Button>
 
-          <Button
-            onClick={toggleAutoRefresh}
-            variant={autoRefresh ? "destructive" : "default"}
-            className="flex items-center gap-2"
-          >
-            {autoRefresh ? "Stop Auto Refresh" : "Start Auto Refresh (5min)"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={toggleAutoRefresh}
+              variant={autoRefresh ? "destructive" : "default"}
+              className="flex items-center gap-2"
+            >
+              {autoRefresh ? "Stop Auto Refresh" : "Start Auto Refresh (5min)"}
+            </Button>
+            {autoRefresh && (
+              <span className="text-sm text-gray-700">Next refresh in: {formatCountdown(nextRefreshIn)}</span>
+            )}
+          </div>
 
           <div className="flex items-center space-x-2">
             <input
@@ -1048,14 +1033,17 @@ export default function MCXTradingApp() {
                 <p className="text-sm text-gray-500">Auto-Download Threshold</p>
                 <p className="text-2xl font-bold text-blue-600">{autoDownloadSettings.recordThreshold}</p>
               </div>
-              <div className="text-center">
-                <p className="text-sm text-gray-500">Last Auto-Download</p>
-                <p className="text-lg font-semibold">
-                  {autoDownloadSettings.lastDownloadCount > 0
-                    ? `${autoDownloadSettings.lastDownloadCount} records`
-                    : "Not yet triggered"}
-                </p>
-              </div>
+             <div className="text-center">
+               <p className="text-sm text-gray-500">Last Auto-Download</p>
+               {lastAutoDownloadInfo ? (
+                 <>
+                   <p className="text-lg font-semibold">{lastAutoDownloadInfo.count} records</p>
+                   <p className="text-sm text-gray-500">{lastAutoDownloadInfo.timestamp.toLocaleTimeString()}</p>
+                 </>
+               ) : (
+                 <p className="text-lg font-semibold">Not yet triggered</p>
+               )}
+            </div>
             </div>
             <div className="mt-4">
               <div className="w-full bg-gray-200 rounded-full h-2">
