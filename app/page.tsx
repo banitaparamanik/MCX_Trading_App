@@ -54,7 +54,7 @@ export default function MCXTradingApp() {
 
   ///New State for lastAutoDownloadInfo:
 
-  const [lastAutoDownloadInfo, setLastAutoDownloadInfo] = useState<{
+  const [lastAutoDownloadInfo, ] = useState<{
   count: number;
   timestamp: Date;
 } | null>(null);
@@ -277,7 +277,7 @@ const fetchOptionChainData = useCallback(async () => {
       })
     }
   }
-}, [isClient, optionChainData, autoDownloadSettings, performAutoDownload, toast])
+}, [isClient, optionChainData, autoDownloadSettings, performAutoDownload, toast, checkForAlerts])
 
 // Include all external dependencies here
 
