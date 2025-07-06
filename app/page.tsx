@@ -846,16 +846,16 @@ enabled ? 📥 Auto-Download Enabled: 📥 Auto-Download Disabled,
                   setAlertSettings((prev) => ({ ...prev, enabled: false }))
                   setShowAlertModal(false)
                   toast(
-  <div>
-    <div className="font-bold">
-   "🔕 Alerts Disabled"
-    </div>
-    <div>
-    "All price alerts have been disabled",
-    </div>
-  </div>,
-  { duration: 3000 }
-)
+                    <div>
+                      <div className="font-bold">
+                        🔕 Alerts Disabled
+                      </div>
+                      <div>
+                   All price alerts have been disabled,
+                         </div>
+                    </div>,
+               { duration: 3000 }
+              )
               ;
                 }}
                 className="flex-1"
