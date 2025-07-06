@@ -88,13 +88,15 @@ export default function MCXTradingApp() {
         )
         audio.play().catch(() => {})
       }
-
-      toast({
-        title: "🚨 Option Price Alert!",
-        description: `${alert.symbol} ${alert.strike}: ₹${alert.oldPrice.toFixed(2)} → ₹${alert.newPrice.toFixed(2)} (${alert.changePercent.toFixed(2)}%)`,
-        variant: "destructive",
-        duration: 5000,
-      })
+toast(
+  <div>
+    <div className="font-bold">🚨 Option Price Alert!</div>
+    <div>
+      {`${alert.symbol} ${alert.strike}: ₹${alert.oldPrice.toFixed(2)} → ₹${alert.newPrice.toFixed(2)} (${alert.changePercent.toFixed(2)}%)`}
+    </div>
+  </div>,
+  { duration: 5000 }
+)
 
       if (alert.changePercent > 10) {
         setShowAlertModal(true)
@@ -207,11 +209,18 @@ const performAutoDownload = useCallback(async (currentRecordCount: number) => {
     lastDownloadCount: currentRecordCount,
   }))
 
-  toast({
-    title: "🔄 Auto-Download Complete",
-    description: `MCX data automatically exported at ${currentRecordCount} records`,
-    duration: 5000,
-  })
+  toast(
+  <div>
+    <div className="font-bold">
+    "🔄 Auto-Download Complete"
+    </div>
+    <div>
+     `MCX data automatically exported at ${currentRecordCount} records`
+    </div>
+  </div>,
+  { duration: 5000 }
+)
+
 }, [isClient, autoDownloadSettings.enabled, historicalData, toast])
 
 
@@ -270,11 +279,18 @@ const fetchOptionChainData = useCallback(async () => {
   } catch (error) {
     console.error("Error fetching option chain:", error)
     if (isClient) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch option chain data.",
-        variant: "destructive",
-      })
+        toast(
+  <div>
+    <div className="font-bold">
+"Error"
+    </div>
+    <div>
+     "Failed to fetch option chain data."
+    </div>
+  </div>,
+ 
+)
+   
     }
   }
 }, [isClient, optionChainData, autoDownloadSettings, performAutoDownload, toast, checkForAlerts])
@@ -289,12 +305,18 @@ const fetchOptionChainData = useCallback(async () => {
     await fetchOptionChainData()
     setLastRefreshTime(new Date())
     setNextRefreshIn(300)
-
-    toast({
-      title: "🔄 Auto Refresh Complete",
-      description: "Option chain data has been refreshed.",
-      duration: 3000,
-    })
+toast(
+  <div>
+    <div className="font-bold">
+      "🔄 Auto Refresh Complete"
+    </div>
+    <div>
+    "Option chain data has been refreshed.",
+    </div>
+  </div>,
+  { duration: 3000 }
+)
+   
   }, [isClient, fetchOptionChainData, toast]) // Dependencies: isClient, fetchOptionChainData
 
   // Toggle auto refresh
@@ -442,12 +464,18 @@ const fetchOptionChainData = useCallback(async () => {
     a.click()
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
-
-    toast({
-      title: "📊 MCX Data Export Complete",
-      description: `${dataToExport.length} historical records exported in MCX format`,
-      duration: 4000,
-    })
+toast(
+  <div>
+    <div className="font-bold">
+   "📊 MCX Data Export Complete",
+    </div>
+    <div>
+    `${dataToExport.length} historical records exported in MCX format`,
+    </div>
+  </div>,
+  { duration: 3000 }
+)
+ 
   }, [isClient, analytics, historicalData, optionChainData, selectedCommodity, selectedExpiry, toast]) // Dependencies
 
   // Initialize client-side rendering
@@ -611,13 +639,19 @@ const fetchOptionChainData = useCallback(async () => {
                 const enabled = e.target.checked
                 setAlertSettings((prev) => ({ ...prev, enabled }))
                 console.log("🔔 Alerts", enabled ? "ENABLED" : "DISABLED")
-                toast({
-                  title: enabled ? "🔔 Alerts Enabled" : "🔕 Alerts Disabled",
-                  description: enabled
-                    ? `Price alerts will trigger at ${alertSettings.threshold}% change`
-                    : "No price alerts will be shown",
-                  duration: 3000,
-                })
+        toast(
+  <div>
+    <div className="font-bold">
+      {enabled ? "🔔 Alerts Enabled" : "🔕 Alerts Disabled"}
+    </div>
+    <div>
+      {enabled
+        ? `Price alerts will trigger at ${alertSettings.threshold}% change`
+        : "No price alerts will be shown"}
+    </div>
+  </div>,
+  { duration: 3000 }
+)
               }}
               className="rounded"
             />
@@ -676,13 +710,21 @@ const fetchOptionChainData = useCallback(async () => {
                 const enabled = e.target.checked
                 setAutoDownloadSettings((prev) => ({ ...prev, enabled }))
                 console.log("📥 Auto-download", enabled ? "ENABLED" : "DISABLED")
-                toast({
-                  title: enabled ? "📥 Auto-Download Enabled" : "📥 Auto-Download Disabled",
-                  description: enabled
-                    ? `CSV will auto-download at ${autoDownloadSettings.recordThreshold} records`
-                    : "Auto-download has been disabled",
-                  duration: 3000,
-                })
+                toast(
+  <div>
+    <div className="font-bold">{
+      
+enabled ? "📥 Auto-Download Enabled" : "📥 Auto-Download Disabled"},
+    </div>
+    <div>
+      {enabled
+        ? `CSV will auto-download at ${autoDownloadSettings.recordThreshold} records`
+        : "Auto-download has been disabled"}
+    </div>
+  </div>,
+  { duration: 3000 }
+)
+            
               }}
               className="rounded"
             />
@@ -802,11 +844,18 @@ const fetchOptionChainData = useCallback(async () => {
                 onClick={() => {
                   setAlertSettings((prev) => ({ ...prev, enabled: false }))
                   setShowAlertModal(false)
-                  toast({
-                    title: "🔕 Alerts Disabled",
-                    description: "All price alerts have been disabled",
-                    duration: 3000,
-                  })
+                  toast(
+  <div>
+    <div className="font-bold">
+   "🔕 Alerts Disabled"
+    </div>
+    <div>
+    "All price alerts have been disabled",
+    </div>
+  </div>,
+  { duration: 3000 }
+)
+              
                 }}
                 className="flex-1"
               >
