@@ -242,9 +242,11 @@ const fetchOptionChainData = useCallback(async () => {
 
     if (isDataChanged(optionChainData, data)) {
       console.log("✅ New data detected. Adding to historical records.")
-
+     checkForAlerts(data)
       setOptionChainData(data)
-
+   // Calculate analytics
+      const analyticsData = mcxApiService.current.calculateAnalytics(data)
+      setAnalytics(analyticsData)
       setHistoricalData((prev) => {
         const updatedHistoricalData = [...prev, ...data]
 
@@ -1002,14 +1004,14 @@ const fetchOptionChainData = useCallback(async () => {
         </Card>
 
         {/* Historical Data Summary */}
-        <Card>
+          <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Historical Data Summary ({historicalData.length} records)</span>
               <div className="flex items-center gap-2">
                 {autoDownloadSettings.enabled && (
                   <Badge variant="outline" className="text-xs">
-                    Auto-download:{" "}
+                    Auto-download: {" "}
                     {autoDownloadSettings.recordThreshold - historicalData.length > 0
                       ? `${autoDownloadSettings.recordThreshold - historicalData.length} records remaining`
                       : "Ready to download"}
@@ -1033,17 +1035,17 @@ const fetchOptionChainData = useCallback(async () => {
                 <p className="text-sm text-gray-500">Auto-Download Threshold</p>
                 <p className="text-2xl font-bold text-blue-600">{autoDownloadSettings.recordThreshold}</p>
               </div>
-             <div className="text-center">
-               <p className="text-sm text-gray-500">Last Auto-Download</p>
-               {lastAutoDownloadInfo ? (
-                 <>
-                   <p className="text-lg font-semibold">{lastAutoDownloadInfo.count} records</p>
-                   <p className="text-sm text-gray-500">{lastAutoDownloadInfo.timestamp.toLocaleTimeString()}</p>
-                 </>
-               ) : (
-                 <p className="text-lg font-semibold">Not yet triggered</p>
-               )}
-            </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-500">Last Auto-Download</p>
+                {lastAutoDownloadInfo ? (
+                  <>
+                    <p className="text-lg font-semibold">{lastAutoDownloadInfo.count} records</p>
+                    <p className="text-sm text-gray-500">{lastAutoDownloadInfo.timestamp.toLocaleTimeString()}</p>
+                  </>
+                ) : (
+                  <p className="text-lg font-semibold">Not yet triggered</p>
+                )}
+              </div>
             </div>
             <div className="mt-4">
               <div className="w-full bg-gray-200 rounded-full h-2">
