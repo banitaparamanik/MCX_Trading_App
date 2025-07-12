@@ -108,62 +108,31 @@ export class MCXApiService {
   private underlyingValue = 5690 // Default value
 
   async fetchOptionChain(commodity = "CRUDEOIL", expiry = "17JUL2025"): Promise<OptionChainData[]> {
-    console.log(`🚀 Fetching MCX data for ${commodity} - ${expiry}`)
+    console.log(`🚀 Fetching LIVE MCX data for ${commodity} - ${expiry}`)
+
+    const url = `${this.baseUrl}?commodity=${encodeURIComponent(commodity)}&expiry=${encodeURIComponent(expiry)}`
 
     try {
-      const url = `${this.baseUrl}?commodity=${encodeURIComponent(commodity)}&expiry=${encodeURIComponent(expiry)}`
-      console.log(`📡 API URL: ${url}`)
-
       const res = await fetch(url, { cache: "no-store" })
-      console.log(`📊 API Response Status: ${res.status}`)
-
       if (!res.ok) {
-        console.warn(`❌ Proxy API failed with status ${res.status}`)
         const errorText = await res.text()
-        console.warn(`❌ Error response: ${errorText}`)
-        this.alertSystem.addAlert(`MCX API failed (${res.status}) – using mock data.`, "warning")
-        return generateMockData()
+        throw new Error(`MCX API failed with status ${res.status}: ${errorText}`)
       }
 
       const response: MCXApiResponse = await res.json()
-      console.log(`📦 API Response:`, {
-        hasData: !!response.data,
-        dataLength: response.data?.length || 0,
-        underlyingValue: response.underlyingValue,
-        hasError: !!response.error,
-      })
 
-      // Check for error in response
-      if (response.error) {
-        console.warn("❌ MCX API returned error:", response.error)
-        this.alertSystem.addAlert(`MCX API error: ${response.error} – using mock data.`, "warning")
-        return generateMockData()
+      if (!response.data || response.data.length === 0) {
+        throw new Error("MCX API returned empty data.")
       }
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        console.warn("❌ MCX API returned no data")
-        this.alertSystem.addAlert(`MCX API returned no data – using mock data.`, "warning")
-        return generateMockData()
-      }
-
-      // Store underlying value for analytics
-      this.underlyingValue = response.underlyingValue || 5690
-
-      console.log(`✅ Successfully loaded ${response.data.length} MCX records, Underlying: ₹${this.underlyingValue}`)
-      this.alertSystem.addAlert(
-        `✅ Live MCX data loaded! ${response.data.length} strikes, Underlying: ₹${this.underlyingValue}`,
-        "info",
-      )
+      this.underlyingValue = response.underlyingValue ?? this.underlyingValue
       return response.data
-    } catch (e) {
-      console.error("❌ Client fetch error:", e)
-      this.alertSystem.addAlert(
-        `Network error: ${e instanceof Error ? e.message : "Unknown error"} – using mock data.`,
-        "error",
-      )
-      return generateMockData()
+    } catch (error) {
+      console.error("❌ LIVE API Fetch Error:", error)
+      throw new Error("Failed to fetch live MCX data")
     }
   }
+
 
   calculateAnalytics(data: OptionChainData[]): AnalyticsData | null {
     if (!data.length) return null
