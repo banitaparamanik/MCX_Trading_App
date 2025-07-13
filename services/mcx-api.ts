@@ -103,7 +103,8 @@ function generateMockData(): OptionChainData[] {
 }
 
 export class MCXApiService {
-  private baseUrl = "/api/option-chain"
+  private baseUrl = "https://mcx-backend.onrender.com/api/option-chain"
+
   private alertSystem = new AlertSystem()
   private underlyingValue = 5690 // Default value
 
